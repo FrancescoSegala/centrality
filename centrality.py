@@ -3,9 +3,20 @@ from random import randint
 import itertools
 from math import sqrt
 import numpy.linalg
+import csv
 
 
 G = nx.read_gml("../Datasets/karate.gml",label="id")
+
+def read_csv_Graph(path) :
+    L = nx.Graph()
+    with open(path, "rb") as csvfile:
+        reader = csv.reader(csvfile, delimiter='\n', quotechar='#')
+        for row in reader:
+            stw = row[0].split(",")[:3]
+            L.add_edge( int(stw[0]) , int(stw[1]) )
+            L[int(stw[0])][int(stw[1])]["weight"] = int(stw[2])
+    return L
 
 
 ################################################################################
@@ -41,7 +52,7 @@ def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normaliza
 def betweenness_in_query_set_weight( G , Q = list(G.nodes), endpoints = True, normalization = False, directed = False):
     #this method computes the betweenness of all the nodes wrt the query set Q
     #endpoints are counted in the shortest path count according to the notes taken during the lectures
-    R , acc , P = compute_weight_matrix( G , Q , directed=directed)
+    R , acc , P = compute_weight_matrix( G , Q , directed=directed )
     V = list(G.nodes)
     #SPS is a dict with all pairs of shortest paths , key = (s,t) , value = [[node,,..,node],..., [node,...,node]]
     SPS = all_pairs_shortest_paths(G , Q)
@@ -158,7 +169,6 @@ def all_pairs_shortest_paths( G , Q ):
     # Q bounded is this a good solution?
 
     #return value is a dict where {key : value} are respetctively (s,t) : all_shortest_paths(s,t)
-
     all_pairs = [x for x in itertools.combinations( Q , 2 ) ]
     SPS = {}
     for (s,t) in all_pairs :
@@ -192,7 +202,7 @@ def select_query_nodes( G , seed , q=None ):
         #keep all the occurrences because if a node appears many times is more likely an important one and thus shoul have
         #more probability to be in Q , however in big networks is unlikely to have lots of repetitions
     Q = []
-    for j in range(q) :
+    for j in range(q*seed) :
         aux = randint(0,len(distance_two)-1)
         Q += [ distance_two[aux] ]
         distance_two=list( filter(lambda x : x != distance_two[aux] , distance_two) ) #removing all the occurrences of distance_two[aux]
@@ -270,6 +280,7 @@ def test_kats( G ):
 ############## MAIN ############################################################
 
 if __name__ == "__main__":
+    G = read_csv_Graph("../Datasets/soc-sign-bitcoinalpha.csv")
     test_betweenness(G)
 
 ##############fine##############################################################

@@ -1,8 +1,11 @@
 #generate a weighted graph for test
 import matplotlib.pyplot as plt
 import networkx as nx
+import csv
+
 
 G = nx.Graph()
+L = nx.Graph()
 
 G.add_edge('a', 'b', weight=1)
 G.add_edge('a', 'c', weight=3)
@@ -47,13 +50,20 @@ for v in p.keys() :
 #print a
 
 for nbr in G["a"]:
-    print nbr 
+    print nbr
+
+    a = "../Datasets/prova.csv"
+
+with open(a, "rb") as csvfile:
+    reader = csv.reader(csvfile, delimiter='\n', quotechar='#')
+    for row in reader:
+        stw = row[0].split(",")[:3]
+        L.add_edge( int(stw[0]) , int(stw[1]) )
+        L[int(stw[0])][int(stw[1])]["weight"] = int(stw[2])
+# SOURCE, TARGET, RATING, TIME #
 
 
-
-
-
-
+print L.nodes
 
 pos = nx.spring_layout(G)  # positions for all nodes
 
