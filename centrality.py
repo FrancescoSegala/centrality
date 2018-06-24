@@ -5,8 +5,14 @@ from math import sqrt
 import numpy.linalg
 import csv
 
+"""
+notation:
+    Graph: G = ( V , E )
+"""
+
 
 G = nx.read_gml("../Datasets/karate.gml",label="id")
+
 
 def read_csv_Graph(path) :
     L = nx.Graph()
@@ -20,7 +26,96 @@ def read_csv_Graph(path) :
 
 
 ################################################################################
+################ Degree centrality for a Query set Q ###########################
+
+"""
+Degree centrality:
+which is defined as the number of links incident upon a node (i.e., the number of ties that a node has).
+The degree can be interpreted in terms of the immediate risk of a node for catching whatever is flowing through
+the network (such as a virus,or some information).In the case of a directed network (where ties have direction),
+we usually define two separate measures of degree centrality, namely indegree and outdegree.
+Accordingly, indegree is a count of the number of ties directed to the node and outdegree is the number of ties that
+the node directs to others. When ties are associated to some positive aspects such as friendship or collaboration,
+indegree is often interpreted as a form of popularity, and outdegree as gregariousness.
+
+The centrality wrt a query set may be the risk of a node to be infected or touched if a subset of node Q is compromised, the more nodes
+in Q you are connected with, the more your risk to be affected by the condition in Q
+
+inDegree and outDegree are supposed to represent two opposite values:
+    inDegree  is the proportion on nodes that point to V and belongs to Q
+    outDegree represents the opposite i.e. the nodes in Q a node V points
+
+so they may represent for the same example above the :
+    inDegree is the risk to be victim of an attack by a compromised set of nodes Q with incoming connections
+    outDegree on the other hand is the risk to connect to a compromised node in the set Q
+
+cost O( |E| )
+"""
+
+
+
+def degree_centrality_in_query_set( G , Q = list(G.nodes) ):
+    V = list(G.nodes)
+    norm = 1.0 / (len(V) - 1.0 )
+    D = dict.fromkeys( V , 0.0 )
+    for e in G.edges() :
+        u,v = e
+        if u in Q or v in Q :
+            D[u] += norm
+            D[v] += norm
+    return D
+
+
+def degree_centrality_in_query_set_Direct(G , Q = list(G.nodes) ):
+    V = list(G.nodes)
+    norm = 1.0 / (len(V) - 1.0 )
+    inD = dict.fromkeys( V , 0.0 )
+    outD = dict.fromkeys( V , 0.0 )
+    for e in G.edges() :
+        u,v = e
+        if u in Q :
+            inD[v] += norm
+        if v in Q :
+            outD[u] += norm
+    return ( inD , outD )
+
+
+
+################################################################################
+################ Closeness Centrality for a Query set Q ########################
+
+"""
+for a node u in V is defined as the inverse of the sum of all the shortest paths between u and any node in Q.
+
+cost of the algorithm : O ( |V| * |Q| * shortest_path_length ) that for nx.shortest_path_length is computed by dijkstra
+so his cost is O (|V^2|+|E|) with the assumption that in general |E| = O(|V^2|) then the overall cost is O( V^3 * Q )
+
+This centrality measure cane be an indcator of how a node U is close to the query set Q that may be a Query set of webpages
+indicating then how it is pertinent the page wrt Q, also it may be a measure of proximity in threat analysis for a set of vulnerable
+machine Q etc.
+"""
+#TODO is correct this ? questions for Q as normalization factor?
+
+def closeness_in_query_set ( G , Q = list( G.nodes ) ):
+    V = list(G.nodes)
+    norm = len( Q ) - 1.0
+    C = dict.fromkeys(V , 0.0)
+    for v in V :
+        sumSPL = 0.0 # sum of all the shortest paths len
+        for u in Q :
+            sumSPL += nx.shortest_path_length(G , source=v , target=u )
+        C[v] = norm/sumSPL
+    return C
+
+
+
+################################################################################
 ############ betweennes centrality for a Query set Q ###########################
+
+"""
+two implementation
+"""
+
 
 
 def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normalization = False):
@@ -210,7 +305,7 @@ def select_query_nodes( G , seed , q=None ):
 
 
 
-def compute_weight_matrix(G , Q = None , directed = False ):
+def compute_weight_matrix(G , Q = list(G.nodes) , directed = False ):
     #this method should return a matrix of weights normalized
     V = list(G.nodes)
     P = dict.fromkeys( V, 0 )
@@ -277,10 +372,43 @@ def test_kats( G ):
     print X
 
 
+
+def test_degree(G):
+    print "----------------------------------------------------------"
+    Q = select_query_nodes(G , 3 )
+    print "--------------------Q-------------------------------------"
+    print Q
+    print "--------------------degree centrality Q---------------------"
+    D = degree_centrality_in_query_set(G, Q)
+    print D
+    print "---------------------degree centrality -----------------------"
+    print nx.degree_centrality(G)
+    print "\n\nNOTE: for each node in Q the degree centrality should be the same"
+
+
+
+
+def test_closeness(G):
+        print "----------------------------------------------------------"
+        Q = select_query_nodes(G , 1 )
+        print "--------------------Q-------------------------------------"
+        print Q
+        print "--------------------Closeness centrality Q---------------------"
+        D = closeness_in_query_set(G, Q)
+        print D
+        print "---------------------degree centrality -----------------------"
+        print nx.closeness_centrality(G)
+
+
+
+
+
 ############## MAIN ############################################################
 
 if __name__ == "__main__":
-    G = read_csv_Graph("../Datasets/soc-sign-bitcoinalpha.csv")
-    test_betweenness(G)
+    #G = read_csv_Graph("../Datasets/soc-sign-bitcoinalpha.csv")
+    #test_betweenness(G)
+    G = nx.read_gml("../Datasets/karate.gml",label="id")
+    test_closeness( G )
 
 ##############fine##############################################################
