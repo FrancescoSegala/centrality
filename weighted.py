@@ -36,7 +36,7 @@ def compute_weight_matrix(G , Q = None , directed = False ):
                 R[(i,j)] = 0
             else:
                 R[(i,j)] = P[i]*P[j]
-                accum += P[i]*P[j]
+            accum += R[(i,j)]
     #normalization
     for r in R.keys():
         R[r] = float(R[r])/accum
@@ -46,8 +46,15 @@ def compute_weight_matrix(G , Q = None , directed = False ):
 r,a,p = compute_weight_matrix(G,G.nodes)
 for v in p.keys() :
     p[v] = v+" "+str(p[v])
-#print r
-#print a
+print r
+print "R"
+sum = 0
+for ac in r.keys():
+    sum+=r[ac]
+print "sum : "
+print sum
+print a
+print p
 
 for nbr in G["a"]:
     print nbr
@@ -63,7 +70,7 @@ with open(a, "rb") as csvfile:
 # SOURCE, TARGET, RATING, TIME #
 
 
-print L.nodes
+print G.nodes
 
 pos = nx.spring_layout(G)  # positions for all nodes
 
@@ -77,7 +84,8 @@ nx.draw_networkx_edges(G, pos, edgelist=elarge,width=6)
 nx.draw_networkx_edges(G, pos, edgelist=esmall, width=6, alpha=0.5, edge_color='b', style='dashed')
 
 # labels
-
+print "AAAAAAAAAAAAAAAAAAAAAAa"
+print G.degree()
 
 nx.draw_networkx_labels(G, pos, labels=p ,font_size=20, font_family='sans-serif')
 nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)

@@ -113,17 +113,41 @@ def closeness_in_query_set ( G , Q = list( G.nodes ) ):
 ############ betweennes centrality for a Query set Q ###########################
 
 """
-two implementation
+two implementation, for unweighted and weighted graph.
+
 """
 
+def betweenness_in_query_set_brandes_01( G , Q =list(G.nodes), endpoints = True ):
+    V = list(G.nodes)
+    B = dict.fromkeys(V, 0.0)
+    for s in V :
+        S , P , sigma = BFS_source( G , s )
+        delta = dict.fromkeys(V, 0.0)
+        #S returns vertices in order of non-increasing distance from s
+        if endpoints:
+            B[s] = len(S)-1
+        while S :
+            w = S.pop()
+            for v in P[w] :
+                delta[v] += (sigma[v]/sigma[w]) * (1+delta[w])
+            if w != s :
+                if endpoints:
+                    B[w] += delta[w]+1
+                else :
+                    B[w] += delta[w]
+    normalize = (len(V)-1) * (len(V)-2)
+    for b in B.keys():
+        B[b] *= 1.0 /normalize
+    return B
 
 
-def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normalization = False):
+
+def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normalization = True):
     #this method computes the betweenness of all the nodes wrt the query set Q
     #endpoints are counted in the shortest path count according to the notes taken during the lectures
     V = list(G.nodes)
     #SPS is a dict with all pairs of shortest paths , key = (s,t) , value = [[node,,..,node],..., [node,...,node]]
-    SPS = all_pairs_shortest_paths(G , Q)
+    SPS = all_pairs_shortest_paths(G , V)
     # B is the dict of betweennes key = node , value = betweenness
     B = dict.fromkeys( V , 0.0 )
     for v in V :
@@ -136,7 +160,7 @@ def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normaliza
             aux = 0.0
             #sp is a shortest path from s to t
             for sp in SPS[st]  :
-                if v in sp and condition:
+                if v in sp and condition and v in Q:
                     aux+=1
             B[v] += aux / len(SPS[st])
         if normalization :
@@ -144,13 +168,13 @@ def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normaliza
     return B
 
 
-def betweenness_in_query_set_weight( G , Q = list(G.nodes), endpoints = True, normalization = False, directed = False):
+def betweenness_in_query_set_weight( G , Q = list(G.nodes), endpoints = True, normalization = True, directed = False):
     #this method computes the betweenness of all the nodes wrt the query set Q
     #endpoints are counted in the shortest path count according to the notes taken during the lectures
     R , acc , P = compute_weight_matrix( G , Q , directed=directed )
     V = list(G.nodes)
     #SPS is a dict with all pairs of shortest paths , key = (s,t) , value = [[node,,..,node],..., [node,...,node]]
-    SPS = all_pairs_shortest_paths(G , Q)
+    SPS = all_pairs_shortest_paths(G , V)
     # B is the dict of betweennes key = node , value = betweenness
     B = dict.fromkeys( V , 0.0 )
     for v in V :
@@ -163,7 +187,7 @@ def betweenness_in_query_set_weight( G , Q = list(G.nodes), endpoints = True, no
             aux = 0.0
             #sp is a shortest path from s to t
             for sp in SPS[st]  :
-                if v in sp and condition:
+                if v in sp and condition and v in Q:
                     aux+=1
             B[v] += (aux / len(SPS[st])) * R[sp]
         if normalization :
@@ -257,6 +281,38 @@ def kats_in_query_set( G , Q = list(G.nodes) , alpha = None ):
 ################################################################################
 ################### AUX METHODS ################################################
 
+#aux method from:
+#https://networkx.github.io/documentation/latest/_modules/networkx/algorithms/centrality/betweenness.html
+
+def BFS_source( G , s ):
+    #this is an aux method for the betweenness centrality, it returns sigma that is a dict where each entry represent the number of
+    #shortest paths between s and the node , S that is the stack of all the nodes encoutered from s , and finally P that is a dict where for
+    #each node there is a list of predecessors following the definition : P_s (v) : {  u in V : (u,v) in E , d_G(s,v)= d_G(s,w)+w(u,v) }
+    #S returns vertices in order of non-increasing distance from s
+    S = []
+    P = {}
+    for v in G:
+        P[v] = []
+    sigma = dict.fromkeys(G, 0.0)    # sigma[v]=0 for v in G
+    D = {}
+    sigma[s] = 1.0
+    D[s] = 0
+    Q = [s]
+    while Q:   # use BFS to find shortest paths
+        v = Q.pop(0)
+        S.append(v)
+        Dv = D[v]
+        sigmav = sigma[v]
+        for w in G[v]:
+            if w not in D:
+                Q.append(w)
+                D[w] = Dv + 1
+            if D[w] == Dv + 1:   # this is a shortest path, count paths
+                sigma[w] += sigmav
+                P[w].append(v)  # predecessors
+    return S, P, sigma
+
+
 
 def all_pairs_shortest_paths( G , Q ):
     #computes all the shortest paths between any s and any t in Q
@@ -273,6 +329,7 @@ def all_pairs_shortest_paths( G , Q ):
 
 
 def select_query_nodes( G , seed , q=None ):
+    #cost O (seed * V )
     # as in the paper it creates a set of query nodes Q , predetermined params are radius = 2 , q = 10 for smal datasets and q = 20 for big datasets
     # the assumption is that q << size(all balls with radius 2)
     # seed is the size of the initial set S of seeds nodes
@@ -307,10 +364,13 @@ def select_query_nodes( G , seed , q=None ):
 
 def compute_weight_matrix(G , Q = list(G.nodes) , directed = False ):
     #this method should return a matrix of weights normalized
+    # NOTE nodes that are not in Q have weight 0 , in fact for a node that has P equal to zero his weight would be zero
+        #thus only nodes that are both in Q will have a weight > 0. according to Rij = Pi*Pj / sum_ij( Pi*Pj )
     V = list(G.nodes)
     P = dict.fromkeys( V, 0 )
     R = {}
     for v in V :
+        #P[v] contains the sum of all the weights of the incidents edges
         if v not in Q :
             P[v] = 0
         else :
@@ -322,7 +382,7 @@ def compute_weight_matrix(G , Q = list(G.nodes) , directed = False ):
                 R[(i,j)] = 0
             else:
                 R[(i,j)] = P[i]*P[j]
-                accum += P[i]*P[j]
+            accum += R[(i,j)]
     #normalization
     for r in R.keys():
         R[r] = float(R[r])/accum
@@ -400,7 +460,10 @@ def test_closeness(G):
         print nx.closeness_centrality(G)
 
 
-
+def test(G):
+    print betweenness_in_query_set_brandes_01(G)
+    print"-------------------------------------"
+    print nx.betweenness_centrality(G , endpoints = True)
 
 
 ############## MAIN ############################################################
@@ -409,6 +472,6 @@ if __name__ == "__main__":
     #G = read_csv_Graph("../Datasets/soc-sign-bitcoinalpha.csv")
     #test_betweenness(G)
     G = nx.read_gml("../Datasets/karate.gml",label="id")
-    test_closeness( G )
+    test( G )
 
 ##############fine##############################################################
