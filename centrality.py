@@ -1,5 +1,5 @@
 import networkx as nx
-from random import randint
+import random
 import itertools
 from math import sqrt
 import numpy.linalg
@@ -103,7 +103,11 @@ def closeness_in_query_set ( G , Q = list( G.nodes ) ):
     for v in V :
         sumSPL = 0.0 # sum of all the shortest paths len
         for u in Q :
-            sumSPL += nx.shortest_path_length(G , source=v , target=u )
+            try:
+                spl = nx.shortest_path_length(G , source=v , target=u )
+            except:
+                spl= 0
+            sumSPL += spl
         C[v] = norm/sumSPL
     return C
 
@@ -117,32 +121,80 @@ two implementation, for unweighted and weighted graph.
 
 """
 
-def betweenness_in_query_set_brandes_01( G , Q =list(G.nodes), endpoints = True ):
+
+"""
+    In the test file BETWEENNESStest.py is shown that betweenness_in_query_set_brandes_01 implementation taken from
+    the networkx official repository do not match
+
+"""
+
+def betweenness_in_query_set_brandes_01( G , Q = list(G.nodes), endpoints = True ):
     V = list(G.nodes)
     B = dict.fromkeys(V, 0.0)
     for s in V :
-        S , P , sigma = BFS_source( G , s )
+        S , P , sigma = BFS_source( G , s , Q) #BFS source is a BFS count so it is O(|E|)
         delta = dict.fromkeys(V, 0.0)
         #S returns vertices in order of non-increasing distance from s
         if endpoints:
-            B[s] = len(S)-1
-        while S :
+            B[s] = len(S)-1 #normalization factor
+        while S : # S has the stack in non icreasing order from the t/t's to s, so if one of them has sigma > 0 it came from QS
+            #then here we have the altered sigmas
             w = S.pop()
             for v in P[w] :
-                delta[v] += (sigma[v]/sigma[w]) * (1+delta[w])
-            if w != s :
+                if sigma[w] != 0: #
+                    delta[v] += (sigma[v]/sigma[w]) * (1+delta[w])
+            if w != s:
                 if endpoints:
                     B[w] += delta[w]+1
                 else :
                     B[w] += delta[w]
-    normalize = (len(V)-1) * (len(V)-2)
+    normalize = (len(V)-1) * (len(V))
     for b in B.keys():
         B[b] *= 1.0 /normalize
     return B
 
 
+#aux method from:
+#https://networkx.github.io/documentation/latest/_modules/networkx/algorithms/centrality/betweenness.html
+
+def BFS_source( G , s , Q = list(G.nodes) ):
+    #this is an aux method for the betweenness centrality, it returns sigma that is a dict where each entry represent the number of
+    #shortest paths between s and the node , S that is the stack of all the nodes encoutered from s , and finally P that is a dict where for
+    #each node there is a list of predecessors following the definition : P_s (v) : {  u in V : (u,v) in E , d_G(s,v)= d_G(s,w)+w(u,v) }
+    #S returns vertices in order of non-increasing distance from s
+    S = [] #
+    P = {} #
+    for v in G: #
+        P[v] = [] #
+    sigma = dict.fromkeys(G, 0.0)    # sigma[v]=0 for v in G
+    D = {} #
+    sigma[s] = 1.0 #
+    D[s] = 0    #distance dict , represent the distance from s of a node
+    Queue = [s] #
+    flag = False
+    while Queue:   # use BFS to find shortest paths
+        v = Queue.pop(0) #
+        flag = flag or v in Q
+        if flag :
+            S.append(v) #
+        Dv = D[v] #
+        sigmav = sigma[v] #
+        for w in G[v]: #
+            if w not in D: #
+                Queue.append(w) #
+                D[w] = Dv + 1 #
+            if D[w] == Dv + 1 :   # this is a shortest path, count paths
+
+            # so v w is an edge that is in the sp ---> if v or w are in QS then this should be added among the count of the
+            # shortest paths in sigma w as one of the shortest paths from v in the previous
+            # if not then this is indeed an edge of a shorthest path but so far is not in Q , then sigma s w should be 0 as so far
+
+                sigma[w] += sigmav #
+                P[w].append(v)  # predecessors
+    return S, P, sigma #
 
 def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normalization = True):
+    #cost depend on all_pairs_shortest_paths and two iteration on V so wc is bounded by the discover of all SP so is O(V^2*E) so potentially O(V^3)
     #this method computes the betweenness of all the nodes wrt the query set Q
     #endpoints are counted in the shortest path count according to the notes taken during the lectures
     V = list(G.nodes)
@@ -159,8 +211,11 @@ def betweenness_in_query_set( G , Q = list(G.nodes), endpoints = True, normaliza
                 condition = True
             aux = 0.0
             #sp is a shortest path from s to t
-            for sp in SPS[st]  :
-                if v in sp and condition and v in Q:
+            flag = False
+            for sp in SPS[st] :
+                for bol in [x in Q for x in sp]:
+                    flag = flag or bol
+                if v in sp and condition and flag :
                     aux+=1
             B[v] += aux / len(SPS[st])
         if normalization :
@@ -186,8 +241,11 @@ def betweenness_in_query_set_weight( G , Q = list(G.nodes), endpoints = True, no
                 condition = True
             aux = 0.0
             #sp is a shortest path from s to t
+            flag = False
             for sp in SPS[st]  :
-                if v in sp and condition and v in Q:
+                for bol in [x in Q for x in sp]:
+                    flag = flag or bol
+                if v in sp and condition and flag:
                     aux+=1
             B[v] += (aux / len(SPS[st])) * R[sp]
         if normalization :
@@ -221,7 +279,7 @@ def eigenvector_in_query_set( G , Q=list(G.nodes) ):
             for nbr in G[n]: # nbr iterate over the neighbors of n
                 Aij = 0
                 if nbr in Q or n in Q :
-                    Aij = G[n][nbr].get("weight", 1)
+                    Aij = G[n][nbr].get("weight", 1) #here we add the weight only if the edge (n , nbr) belogns to Q
                 x[nbr] += xlast[n] * Aij
         # normalize vector
         try:
@@ -255,18 +313,18 @@ def kats_in_query_set( G , Q = list(G.nodes) , alpha = None ):
         alpha = 1.0 /  max(e)
     x = dict([(n,1.0) for n in G])
     for i in range(max_iter):
-        xlast = x
+        xlast = x    #save the x(t-1) vector
         x = dict.fromkeys(xlast, 0)
         # do the multiplication x^T = (alpha x^T AQ )+1
         for n in x: #n is each node
-            for nbr in G[n]: # nbr iterate over the neighbors of n
+            for nbr in G[n]: # nbr iterate over the neighbors of n, G[n] in fact return the neighbors of n
                 Aij = 0
                 if nbr in Q or n in Q :
-                    Aij = G[n][nbr].get("weight", 1)
+                    Aij = G[n][nbr].get("weight", 1)   #here we add the weight only if the edge (n , nbr) belogns to Q
                 x[nbr] += alpha * xlast[n] * Aij + 1
         # normalize vector
         try:
-            s = 1.0/sqrt(sum(v**2 for v in x.values()))
+            s = 1.0/sqrt(sum( v**2 for v in x.values() ))
         # this should never be zero?
         except ZeroDivisionError:
             s = 1.0
@@ -281,37 +339,6 @@ def kats_in_query_set( G , Q = list(G.nodes) , alpha = None ):
 ################################################################################
 ################### AUX METHODS ################################################
 
-#aux method from:
-#https://networkx.github.io/documentation/latest/_modules/networkx/algorithms/centrality/betweenness.html
-
-def BFS_source( G , s ):
-    #this is an aux method for the betweenness centrality, it returns sigma that is a dict where each entry represent the number of
-    #shortest paths between s and the node , S that is the stack of all the nodes encoutered from s , and finally P that is a dict where for
-    #each node there is a list of predecessors following the definition : P_s (v) : {  u in V : (u,v) in E , d_G(s,v)= d_G(s,w)+w(u,v) }
-    #S returns vertices in order of non-increasing distance from s
-    S = []
-    P = {}
-    for v in G:
-        P[v] = []
-    sigma = dict.fromkeys(G, 0.0)    # sigma[v]=0 for v in G
-    D = {}
-    sigma[s] = 1.0
-    D[s] = 0
-    Q = [s]
-    while Q:   # use BFS to find shortest paths
-        v = Q.pop(0)
-        S.append(v)
-        Dv = D[v]
-        sigmav = sigma[v]
-        for w in G[v]:
-            if w not in D:
-                Q.append(w)
-                D[w] = Dv + 1
-            if D[w] == Dv + 1:   # this is a shortest path, count paths
-                sigma[w] += sigmav
-                P[w].append(v)  # predecessors
-    return S, P, sigma
-
 
 
 def all_pairs_shortest_paths( G , Q ):
@@ -323,7 +350,10 @@ def all_pairs_shortest_paths( G , Q ):
     all_pairs = [x for x in itertools.combinations( Q , 2 ) ]
     SPS = {}
     for (s,t) in all_pairs :
-        SPS[ (s,t) ] = [ x for x in nx.all_shortest_paths( G , source=s , target=t ) ]
+        try:
+            SPS[ (s,t) ] = [ x for x in nx.all_shortest_paths( G , source=s , target=t ) ]
+        except:
+            SPS[ (s,t) ]= [[1]]
     return SPS
 
 
@@ -333,6 +363,7 @@ def select_query_nodes( G , seed , q=None ):
     # as in the paper it creates a set of query nodes Q , predetermined params are radius = 2 , q = 10 for smal datasets and q = 20 for big datasets
     # the assumption is that q << size(all balls with radius 2)
     # seed is the size of the initial set S of seeds nodes
+    random.seed()
     if q is None :
         q = 10
         # assumption that 200 nodes is the boundary for big dataset
@@ -342,7 +373,7 @@ def select_query_nodes( G , seed , q=None ):
     index=0
     V = list(G.nodes)
     for i in range(seed):
-        S[index] = V[randint(0,len(V))-1]
+        S[index] = V[random.randint(0,len(V)-1)]
         index+=1
     distance_one = []
     for s in S :
@@ -355,7 +386,10 @@ def select_query_nodes( G , seed , q=None ):
         #more probability to be in Q , however in big networks is unlikely to have lots of repetitions
     Q = []
     for j in range(q*seed) :
-        aux = randint(0,len(distance_two)-1)
+        if len(distance_two) <= 2 :
+            continue
+        aux = random.randint(1,len(distance_two))
+        aux-=1
         Q += [ distance_two[aux] ]
         distance_two=list( filter(lambda x : x != distance_two[aux] , distance_two) ) #removing all the occurrences of distance_two[aux]
     return Q
@@ -461,7 +495,7 @@ def test_closeness(G):
 
 
 def test(G):
-    print betweenness_in_query_set_brandes_01(G)
+    print betweenness_in_query_set_brandes_01(G )
     print"-------------------------------------"
     print nx.betweenness_centrality(G , endpoints = True)
 
@@ -471,7 +505,7 @@ def test(G):
 if __name__ == "__main__":
     #G = read_csv_Graph("../Datasets/soc-sign-bitcoinalpha.csv")
     #test_betweenness(G)
-    G = nx.read_gml("../Datasets/karate.gml",label="id")
-    test( G )
+    G = nx.read_gml("../Datasets/netscience.gml",label="id")
+    print select_query_nodes(G , 3)
 
 ##############fine##############################################################
